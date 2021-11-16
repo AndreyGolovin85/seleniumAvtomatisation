@@ -1,0 +1,74 @@
+"""
+Автоматизация ловли рыбы на сайте wmod.ru
+"""
+#! /usr/bin/python
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from time import sleep
+from datetime import datetime
+import requests
+from bs4 import BeautifulSoup
+import json
+
+username = "Логин"
+password = "Пароль"
+i = 0
+
+def acp_api_send_request(driver, message_type, data={}):
+    message = {
+        # всегда указывается именно этот получатель API сообщения
+        'receiver': 'antiCaptchaPlugin',
+        # тип запроса, например setOptions
+        'type': message_type,
+        # мерджим с дополнительными данными
+        **data
+    }
+    # выполняем JS код на странице
+    # а именно отправляем сообщение стандартным методом window.postMessage
+    return driver.execute_script("""
+    return window.postMessage({});
+    """.format(json.dumps(message)))
+
+chrome_options = Options()
+chrome_options.add_extension('/home/andrey/Рабочий стол/python_script/selenium_test/anticaptcha-plugin_v0.60.crx')
+driver = webdriver.Chrome(chrome_options=chrome_options, executable_path='/home/andrey/Рабочий стол/python_script/selenium_test/operadriver')
+driver.get("http://www.wmod.ru")
+sleep(1)
+
+acp_api_send_request(
+    driver,
+    'setOptions',
+    {'options': {'antiCaptchaApiKey': 'Ключ anticaptcha'}}
+)
+
+# найти поле ввода пароля и вставить логин
+driver.find_element_by_id("email").send_keys(username)
+# найти поле ввода пароля и также вставить пароль
+driver.find_element_by_id("password").send_keys(password)
+# нажмите кнопку входа в систему
+driver.find_element_by_name("submit").click()
+
+while i != 800:
+    driver.find_element_by_link_text("ловить").click()
+    
+    page = driver.page_source
+    soup = BeautifulSoup(page, 'html.parser')
+    list_1 = soup.text
+    list_1 = ' '.join(list_1.split())
+    res = list_1.split()
+    del res[25:]
+    
+    failed = res[4].replace("Таймаут", '')
+    captcha = soup.find("div", class_="captcha")
+    if captcha != None:
+        sleep(60)
+    if failed == "Ошибка!":
+        sleep(int(res[5]))
+    else:
+        button_fish = driver.find_element_by_xpath("//input[@name='submit'][@type='submit'][@value='Вытащить на берег?']").click()
+        
+        ingridients = driver.find_element_by_xpath("//span").text
+        now = datetime.now()
+        a = now.strftime("%H:%M:%S")
+        i += 1
+        print(ingridients, i, a)
